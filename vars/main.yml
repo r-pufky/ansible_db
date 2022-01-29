@@ -1,0 +1,61 @@
+---
+###############################################################################
+# Default MariaDB User Group
+###############################################################################
+# Default group settings if an maria user is force created.
+
+db_maria_default_group:
+  name: 'mysql'
+  gid:  301
+
+###############################################################################
+# Default MariaDB User Account
+###############################################################################
+# Default user settings if an maria user is force created.
+#
+# Logins are disabled.
+
+db_maria_default_user:
+  name:            'mysql'
+  group:           'mysql'
+  uid:             301
+  shell:           '/usr/sbin/nologin'
+  home:            '/nonexistent'
+  comment:         'MySQL Server,,,'
+  create_home:     false
+  password:        '!'
+  password_lock:   true
+  update_password: 'always'
+  expires:         -1
+  system:          true
+
+###############################################################################
+# Default Postgres User Group
+###############################################################################
+# Default group settings if an maria user is force created.
+
+db_postgres_default_group:
+  name: 'postgres'
+  gid:  300
+
+###############################################################################
+# Default MariaDB User Account
+###############################################################################
+# Default user settings if an maria user is force created.
+#
+# Logins are disabled.
+
+db_postgres_default_user:
+  name:            'postgres'
+  group:           'postgres'
+  uid:             300
+  shell:           '/bin/bash'
+  home:            '/var/lib/postgresql'
+  comment:         'PostgreSQL administrator,,,'
+  create_home:     false
+  password:        '!'
+  password_lock:   true
+  update_password: 'always'
+  expires:         -1
+  system:          true
+  state:           'present'

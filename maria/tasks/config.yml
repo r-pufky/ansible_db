@@ -1,0 +1,79 @@
+---
+###############################################################################
+# MariaDB Config
+###############################################################################
+
+- name: 'config | set global config'
+  ansible.builtin.template:
+    src:   'mariadb.cnf.j2'
+    dest:  '/etc/mysql/mariadb.cnf'
+    owner: 'root'
+    group: 'root'
+    mode:  0644
+  notify: 'restart maria'
+
+- name: 'config | set client config'
+  ansible.builtin.template:
+    src:   'mariadb.conf.d/50-client.cnf.j2'
+    dest:  '/etc/mysql/mariadb.conf.d/50-client.cnf'
+    owner: 'root'
+    group: 'root'
+    mode:  0644
+  notify: 'restart maria'
+
+- name: 'config | set clients config'
+  ansible.builtin.template:
+    src:   'mariadb.conf.d/50-mysql-clients.cnf.j2'
+    dest:  '/etc/mysql/mariadb.conf.d/50-mysql-clients.cnf'
+    owner: 'root'
+    group: 'root'
+    mode:  0644
+  notify: 'restart maria'
+
+- name: 'config | set server config'
+  ansible.builtin.template:
+    src:   'mariadb.conf.d/50-server.cnf.j2'
+    dest:  '/etc/mysql/mariadb.conf.d/50-server.cnf'
+    owner: 'root'
+    group: 'root'
+    mode:  0644
+  notify: 'restart maria'
+
+- name: 'config | set galera config'
+  ansible.builtin.template:
+    src:   'mariadb.conf.d/60-galera.cnf.j2'
+    dest:  '/etc/mysql/mariadb.conf.d/60-galera.cnf'
+    owner: 'root'
+    group: 'root'
+    mode:  0644
+  notify: 'restart maria'
+
+- name: 'config | set backup script'
+  ansible.builtin.template:
+    src:   'maria-backup.j2'
+    dest:  '/root/maria-backup'
+    owner: 'root'
+    group: 'root'
+    mode: 0700
+
+- name: 'config | create data dir'
+  ansible.builtin.file:
+    path:  '{{ db_maria_mysqld_data_dir }}'
+    owner: '{{ db_maria_user }}'
+    group: '{{ db_maria_group }}'
+    mode:  0755
+    state: 'directory'
+
+- name: 'config | set backup cron'
+  ansible.builtin.cron:
+    name:         'backup mariadb weekly'
+    special_time: 'weekly'
+    user:         'root'
+    job:          '/root/maria-backup'
+    state:        '{% if db_maria_enable_weekly %}present{% else %}absent{% endif %}'
+
+- name: 'config | enable start on boot'
+  ansible.builtin.service:
+    name:    'mariadb'
+    state:   'started'
+    enabled: true

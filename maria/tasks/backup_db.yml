@@ -1,0 +1,28 @@
+---
+###############################################################################
+# MariaDB Backup DB
+###############################################################################
+# Backup existing maria database.
+#
+# Args:
+#   db: dict containing databse to backup {name:'', ...}.
+#
+# Reference:
+# * https://semisignal.com/mysql-database-import-with-ansible/
+
+- name: 'backup db | backup {{ db.name }}'
+  community.mysql.mysql_db:
+    name:   '{{ db.name }}'
+    target: '{{ db_maria_backup_dir }}/{{ db.name }}-{{ _db_maria_backup_date }}.sql'
+    dump_extra_args:   '{{ db_maria_backup_options.strip() }}'
+    login_unix_socket: '{{ db_maria_client_server_socket }}'
+    state:  'dump'
+
+- name: 'backup db | set latest backup {{ db.name }}'
+  ansible.builtin.file:
+    src:   '{{ db_maria_backup_dir }}/{{ db.name }}-{{ _db_maria_backup_date }}.sql'
+    dest:  '{{ db_maria_backup_dir }}/{{ db.name }}-latest.sql'
+    owner: '{{ db_maria_user }}'
+    group: '{{ db_maria_group }}'
+    mode:  0750
+    state: 'link'

@@ -1,0 +1,23 @@
+---
+###############################################################################
+# MariaDB Backup
+###############################################################################
+# Backup existing maria databases.
+
+- name: 'backup | create backup dir'
+  ansible.builtin.file:
+    path:  '{{ db_maria_backup_dir }}'
+    owner: '{{ db_maria_user }}'
+    group: '{{ db_maria_group }}'
+    mode:  0750
+    state: 'directory'
+
+- name: 'backup | set backup date'
+  ansible.builtin.set_fact:
+    _db_maria_backup_date: '{{ ansible_date_time.date }}'
+
+- name: 'backup | backup databases'
+  ansible.builtin.include_tasks: backup_db.yml
+  loop: '{{ db_maria_databases }}'
+  loop_control:
+    loop_var: db

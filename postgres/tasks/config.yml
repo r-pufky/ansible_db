@@ -1,0 +1,135 @@
+---
+###############################################################################
+# Postgres Config
+###############################################################################
+
+- name: 'config | add environment variables to login profiles'
+  ansible.builtin.template:
+    src:   'postgres.sh.j2'
+    dest:  '/etc/profile.d/postgres.sh'
+    owner: 'root'
+    group: 'root'
+    mode:  0644
+  notify: 'restart postgres'
+
+- name: 'config | create data directory'
+  ansible.builtin.file:
+    path:  '{{ db_postgres_data_dir }}'
+    owner: '{{ db_postgres_user }}'
+    group: '{{ db_postgres_group }}'
+    state: 'directory'
+    mode:  0700
+
+- name: 'config | create config directory'
+  ansible.builtin.file:
+    path:  '{{ db_postgres_config_path }}'
+    owner: '{{ db_postgres_user }}'
+    group: '{{ db_postgres_group }}'
+    state: 'directory'
+    mode:  0755
+
+- name: 'config | check db init'
+  ansible.builtin.stat:
+    path: '{{ db_postgres_data_dir }}/PG_VERSION'
+  register: _db_postgres_pgdata_dir_version
+
+- name: 'config | init db'
+  ansible.builtin.command: '{{ db_postgres_bin_path }}/initdb -D {{ db_postgres_data_dir }}'
+  when: not _db_postgres_pgdata_dir_version.stat.exists
+  become: true
+  become_user: '{{ db_postgres_user }}'
+  # Reference: https://github.com/ansible/ansible/issues/16048#issuecomment-229012509
+  vars:
+    ansible_ssh_pipelining: true
+
+- name: 'config | set postgresql/global config'
+  ansible.builtin.template:
+    src:   'postgresql.conf.j2'
+    dest:  '{{ db_postgres_config_path }}/postgresql.conf'
+    owner: '{{ db_postgres_user }}'
+    group: '{{ db_postgres_group }}'
+    mode:  0644
+  notify: 'restart postgres'
+
+- name: 'config | set environment/postgres process environment config'
+  ansible.builtin.template:
+    src:   'environment.j2'
+    dest:  '{{ db_postgres_config_path }}/environment'
+    owner: '{{ db_postgres_user }}'
+    group: '{{ db_postgres_group }}'
+    mode:  0644
+  notify: 'restart postgres'
+
+- name: 'config | set ident/user name maps config'
+  ansible.builtin.template:
+    src:   'pg_ident.conf.j2'
+    dest:  '{{ db_postgres_config_path }}/pg_ident.conf'
+    owner: '{{ db_postgres_user }}'
+    group: '{{ db_postgres_group }}'
+    mode:  0640
+  notify: 'restart postgres'
+
+- name: 'config | set ctl/cluster options config'
+  ansible.builtin.template:
+    src:   'pg_ctl.conf.j2'
+    dest:  '{{ db_postgres_config_path }}/pg_ctl.conf'
+    owner: '{{ db_postgres_user }}'
+    group: '{{ db_postgres_group }}'
+    mode:  0644
+  notify: 'restart postgres'
+
+- name: 'config | set start/startup options config'
+  ansible.builtin.template:
+    src:   'start.conf.j2'
+    dest:  '{{ db_postgres_config_path }}/start.conf'
+    owner: '{{ db_postgres_user }}'
+    group: '{{ db_postgres_group }}'
+    mode:  0644
+  notify: 'restart postgres'
+
+- name: 'config | set hba/host based authentication config'
+  ansible.builtin.template:
+    src:   'pg_hba.conf.j2'
+    dest:  '{{ db_postgres_config_path }}/pg_hba.conf'
+    owner: '{{ db_postgres_user }}'
+    group: '{{ db_postgres_group }}'
+    mode:  0640
+  notify: 'restart postgres'
+
+- name: 'config | create unix socket directories'
+  ansible.builtin.file:
+    path:  '{{ item }}'
+    owner: '{{ db_postgres_user }}'
+    group: '{{ db_postgres_group }}'
+    mode:  02775
+    state: 'directory'
+  loop: '{{ db_postgres_unix_sockets }}'
+
+- name: 'config | preconfigure no-delete db on uninstall'
+  ansible.builtin.debconf:
+    name:     'postgresql-{{ db_postgres_version }}'
+    question: 'postgresql-{{ db_postgres_version }}/postrm_purge_data'
+    value:    'false'
+    vtype:    'boolean'
+
+- name: 'config | set backup script'
+  ansible.builtin.template:
+    src:   'postgres-backup.j2'
+    dest:  '{{ db_postgres_backup_dir }}/postgres-backup'
+    owner: '{{ db_postgres_user }}'
+    group: '{{ db_postgres_group }}'
+    mode:  0700
+
+- name: 'config | set backup cron'
+  ansible.builtin.cron:
+    name:         'backup postgres weekly'
+    special_time: 'weekly'
+    user:         '{{ db_postgres_user }}'
+    job:          '{{ db_postgres_backup_dir }}/postgres-backup'
+    state:        '{% if db_postgres_enable_weekly %}present{% else %}absent{% endif %}'
+
+- name: 'config | start and enable on boot'
+  ansible.builtin.service:
+    name:    'postgresql'
+    state:   'started'
+    enabled: true

@@ -1,0 +1,95 @@
+---
+###############################################################################
+# Secure MariaDB
+###############################################################################
+# mariadb-secure-installation and mysql_secure_installation are the same script
+# commands below execute the same commands as in the script but don't require
+# using expect with an interactive command to handle the processing.
+#
+# /usr/bin/mariadb-secure-installation does the same steps below, and can be
+# run to verify correctness.
+#
+# Local socket connections require authentication if password is set.
+#
+# Reference:
+# * https://mariadb.com/kb/en/mysql_secure_installation/
+# * https://www.digitalocean.com/community/tutorials/how-to-reset-your-mysql-or-mariadb-root-password
+# * https://github.com/geerlingguy/ansible-role-mysql/issues/60
+# * https://stackoverflow.com/questions/38393343/how-to-use-ansible-expect-module-for-multiple-different-responses
+
+- name: 'secure | update root@localhost password, or set it via local socket'
+  block:
+    - name: 'secure | update {{ db_maria_root_username }}@localhost'
+      community.mysql.mysql_user:
+        name:     '{{ db_maria_root_username }}'
+        host:     'localhost'
+        password: '{{ db_maria_root_password }}'
+        priv:     '*.*:ALL,GRANT'
+        login_password:    '{{ db_maria_root_password }}'
+        login_unix_socket: '{{ db_maria_client_server_socket }}'
+        state:    'present'
+  rescue:
+    - name: 'secure | password not set; set {{ db_maria_root_username }}@localhost password'
+      community.mysql.mysql_user:
+        name:     '{{ db_maria_root_username }}'
+        host:     'localhost'
+        password: '{{ db_maria_root_password }}'
+        priv:     '*.*:ALL,GRANT'
+        login_unix_socket: '{{ db_maria_client_server_socket }}'
+        state:    'present'
+
+- name: 'secure | create {{ db_maria_root_username }}@localhost my.cnf for local connection auth'
+  ansible.builtin.template:
+    src:   'my.cnf.j2'
+    dest:  '{{ db_maria_root_home }}/.my.cnf'
+    owner: '{{ db_maria_root_username }}'
+    mode:  0400
+
+- name: 'secure | disable remote root login'
+  ansible.builtin.command: 'mysql -NBe "{{ item }}" --socket {{ db_maria_client_server_socket }}'
+  loop:
+    - "DELETE FROM mysql.user WHERE User='{{ db_maria_root_username }}' AND Host NOT IN ('localhost', '127.0.0.1', '::1')"
+  changed_when: false
+
+- name: 'secure | get root user host list'
+  ansible.builtin.command: 'mysql -NBe "{{ item }}" --socket {{ db_maria_client_server_socket }}'
+  loop:
+    - "SELECT Host FROM mysql.user WHERE User='{{ db_maria_root_username }}' ORDER BY (Host='localhost') ASC"
+  register: _db_maria_root_hosts
+  changed_when: false
+  check_mode: false
+
+- name: 'secure | update root@* password' # noqa no-changed-when always execute
+  ansible.builtin.shell: >
+    mysql -u root -NBe
+    'ALTER USER "{{ db_maria_root_username }}"@"{{ item }}"
+    IDENTIFIED BY "{{ db_maria_root_password }}"; FLUSH PRIVILEGES;'
+    '--socket {{ db_maria_client_server_socket }}'
+  with_items: '{{ _db_maria_root_hosts.stdout_lines|default([]) }}'
+
+- name: 'secure | find all anonymous user hosts'
+  ansible.builtin.command: mysql -NBe 'SELECT Host FROM mysql.user WHERE User = ""' --socket '{{ db_maria_client_server_socket }}'
+  register: _db_maria_anonymous_hosts
+  changed_when: false
+  check_mode: false
+
+- name: 'secure | remove anonymous users'
+  community.mysql.mysql_user:
+    name:  ''
+    host:  '{{ item }}'
+    state: 'absent'
+    login_unix_socket: '{{ db_maria_client_server_socket }}'
+  with_items: '{{ _db_maria_anonymous_hosts.stdout_lines|default([]) }}'
+
+- name: 'secure | remove test database'
+  community.mysql.mysql_db:
+    name:  'test'
+    state: 'absent'
+    login_unix_socket: '{{ db_maria_client_server_socket }}'
+
+- name: 'secure | SECURITY NOTIFICATION'
+  ansible.builtin.debug:
+    msg: |
+      Installation secured. May manually re-run with
+
+        /usr/bin/mariadb-secure-installation

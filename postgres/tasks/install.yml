@@ -1,0 +1,65 @@
+---
+###############################################################################
+# Postgres Install
+###############################################################################
+# The major version (postgresql-12.x) must be installed first for the
+# meta-packages to be installed correctly.
+#
+# Based on ansible-role-postgresql, simplified with bug fixes and 12+ support.
+#
+# postgresql will fail to install if pre-existing databases are in data_dir. It
+# expects a clean /etc, /var/lib/postgresql, etc.
+#
+# Meaning, a clean install with no mounted DB's will work fine. A install with
+# pre-existing DB's will cause installation failures currently.
+#
+# Reference:
+# * https://wiki.postgresql.org/wiki/Apt
+# * https://www.postgresql.org/download/linux/debian/
+# * https://computingforgeeks.com/install-postgresql-12-on-debian/
+# * https://github.com/geerlingguy/ansible-role-postgresql
+# * https://stackoverflow.com/questions/2748607/how-to-thoroughly-purge-and-reinstall-postgresql-on-ubuntu
+
+- ansible.builtin.include_tasks: manage_users.yml
+
+- name: 'install | ensure GPG is installed'
+  ansible.builtin.apt:
+    name:  'gnupg2'
+    state: 'latest'
+    update_cache: true
+
+- name: 'install | add postgres repo key'
+  ansible.builtin.apt_key:
+    url:   'https://www.postgresql.org/media/keys/ACCC4CF8.asc'
+    state: 'present'
+
+- name: 'install | add postgres repo'
+  ansible.builtin.apt_repository:
+    repo:     'deb http://apt.postgresql.org/pub/repos/apt/ buster-pgdg main'
+    filename: 'postgres'
+    update_cache: true
+    state:    'present'
+
+- name: 'install | install libraries'
+  ansible.builtin.apt:
+    name:  '{{ db_postgres_python_library }}'
+    state: 'latest'
+
+- name: 'install | install postgres'
+  ansible.builtin.apt:
+    name:  '{{ db_postgres_packages }}'
+    install_recommends: true
+    state: 'latest'
+
+- name: 'install | configure locales'
+  community.general.locale_gen:
+    name:  '{{ item }}'
+    state: 'present'
+  loop: '{{ db_postgres_locales }}'
+  register: _db_postgres_locale_gen_result
+
+- name: 'install | enable locales' # noqa no-handler conditional
+  ansible.builtin.service:
+    name:  'postgresql'
+    state: 'restarted'
+  when: _db_postgres_locale_gen_result.changed

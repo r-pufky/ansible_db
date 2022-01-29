@@ -1,0 +1,35 @@
+---
+###############################################################################
+# MariaDB Import DB
+###############################################################################
+# If the database is newly created, automatically attempt to import the latest
+# backup.
+#
+# Patches:
+# * httips://github.com/geerlingguy/ansible-role-mysql/pull/442
+#   Add resource limits to user accounts.
+# * https://github.com/geerlingguy/ansible-role-mysql/pull/425
+#   Use unix socket as the preferred connection method.
+#
+# Args:
+#   db: dict containing databse to backup {name:'', ...}.
+#
+# Reference:
+# * https://semisignal.com/mysql-database-import-with-ansible/
+
+- name: 'import db | create db {{ db.name }} if not present'
+  community.mysql.mysql_db:
+    name:      '{{ db.name }}'
+    collation: '{{ db.collation|default("utf8_general_ci") }}'
+    encoding:  '{{ db.encoding|default("utf8") }}'
+    state:     '{{ db.state|default("present") }}'
+    login_unix_socket: '{{ db_maria_client_server_socket }}'
+  register: _db_maria_db_create
+
+- name: 'import db | import {{ db.name }}' # noqa no-handler conditional
+  community.mysql.mysql_db:
+    name:   '{{ db.name }}'
+    target: '{{ db_maria_backup_dir }}/{{ db.name }}-latest.sql'
+    login_unix_socket: '{{ db_maria_client_server_socket }}'
+    state:  'import'
+  when: _db_maria_db_create.changed

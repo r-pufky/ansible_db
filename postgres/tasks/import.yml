@@ -1,0 +1,70 @@
+---
+###############################################################################
+# Postgres Import
+###############################################################################
+# Setup user accounts & initial databases.
+#
+# If the database is newly created, automatically attempt to import the latest
+# backup.
+#
+# Patches:
+# * https://github.com/geerlingguy/ansible-role-postgresql/pull/167
+#   Enable encrypted users.
+# * https://github.com/geerlingguy/ansible-role-postgresql/pull/165
+#   Add connection limit support (conn_limit) for db, users.
+# * htps://github.com/geerlingguy/ansible-role-postgresql/pull/148
+#   Only create DB's if they are not already present.
+# * https://github.com/geerlingguy/ansible-role-postgresql/pull/171
+#   Enable ansible connections if using non-default port.
+
+- ansible.builtin.include_tasks: pgoptions.yml
+
+- name: 'import | create users'
+  community.postgresql.postgresql_user:
+    name:       '{{ item.name }}'
+    password:   '{{ item.password|default(omit) }}'
+    encrypted:  '{{ item.encrypted|default(omit) }}'
+    login_host: '{{ item.login_host|default("localhost") }}'
+    login_user: '{{ item.login_user|default(db_postgres_user) }}'
+    login_password:    '{{ item.login_password|default(omit) }}'
+    login_unix_socket: '{{ item.login_unix_socket|default(db_postgres_unix_sockets[0]) }}'
+    port:       '{{ item.port|default(omit) }}'
+  loop: '{{ db_postgres_users }}'
+  become: true
+  become_user: '{{ db_postgres_user }}'
+  # Reference: https://github.com/ansible/ansible/issues/16048#issuecomment-229012509
+  vars:
+    ansible_ssh_pipelining: true
+  environment:
+    PGOPTIONS: '{{ _db_postgres_pgoptions }}'
+  no_log: true # db password
+
+- name: 'import | get existing dbs'
+  community.postgresql.postgresql_query:
+    login_host: 'localhost'
+    login_user: '{{ db_postgres_user }}'
+    login_unix_socket: '{{ db_postgres_unix_sockets[0] }}'
+    db:         'postgres'
+    query:      'SELECT datname FROM pg_database;'
+  become: true
+  become_user: '{{ db_postgres_user }}'
+  # Reference: https://github.com/ansible/ansible/issues/16048#issuecomment-229012509
+  vars:
+    ansible_ssh_pipelining: true
+  environment:
+    PGOPTIONS: '{{ _db_postgres_pgoptions }}'
+  register: _db_postgres_existing_dbs
+  no_log: true # db password
+
+- name: 'import | create and import dbs if not present'
+  ansible.builtin.include_tasks: import_db.yml
+  loop: '{{ db_postgres_databases }}'
+  loop_control:
+    loop_var: db
+
+- name: 'import | set user/db permissions'
+  ansible.builtin.include_tasks: user_db_perms.yml
+  loop: '{{ db_postgres_users }}'
+  loop_control:
+    loop_var: user
+  no_log: true # user password

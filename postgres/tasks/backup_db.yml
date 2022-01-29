@@ -1,0 +1,42 @@
+---
+###############################################################################
+# Postgres Backup DB
+###############################################################################
+# Backup existing postgres database.
+#
+# Args:
+#   db: dict containing database to backup, see defaults.yml.
+#
+# Reference:
+# * https://semisignal.com/postgresql-database-import-with-ansible/
+
+- ansible.builtin.include_tasks: pgoptions.yml
+
+- name: 'backup {{ db.name }}'
+  community.postgresql.postgresql_db:
+    name:       '{{ db.name }}'
+    login_host: '{{ db.login_host|default("localhost") }}'
+    login_user: '{{ db.login_user|default(db_postgres_user) }}'
+    login_password:    '{{ db.login_password|default(omit) }}'
+    login_unix_socket: '{{ db.login_unix_socket|default(db_postgres_unix_sockets[0]) }}'
+    port:        '{{ db.port|default(omit) }}'
+    target:      '{{ db_postgres_backup_dir }}/{{ db.name }}-{{ _db_postgres_backup_date }}.sql'
+    target_opts: '{{ db_postgres_backup_options.strip() }}'
+    state:       'dump'
+  become: true
+  become_user: '{{ db_postgres_user }}'
+  # Reference: https://github.com/ansible/ansible/issues/16048#issuecomment-229012509
+  vars:
+    ansible_ssh_pipelining: true
+  environment:
+    PGOPTIONS: '{{ _db_postgres_pgoptions }}'
+  no_log: true
+
+- name: 'set latest backup {{ db.name }}'
+  ansible.builtin.file:
+    src:   '{{ db_postgres_backup_dir }}/{{ db.name }}-{{ _db_postgres_backup_date }}.sql'
+    dest:  '{{ db_postgres_backup_dir }}/{{ db.name }}-latest.sql'
+    owner: '{{ db_postgres_user }}'
+    group: '{{ db_postgres_group }}'
+    mode:  0750
+    state: 'link'

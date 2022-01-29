@@ -1,0 +1,26 @@
+---
+###############################################################################
+# Postgres Backup
+###############################################################################
+# Backup existing postgres databases.
+#
+# Reference:
+# * https://semisignal.com/postgresql-database-import-with-ansible/
+
+- name: 'backup | create backup dir'
+  ansible.builtin.file:
+    path:  '{{ db_postgres_backup_dir }}'
+    owner: '{{ db_postgres_user }}'
+    group: '{{ db_postgres_group }}'
+    mode:  0750
+    state: 'directory'
+
+- name: 'backup | set backup date'
+  ansible.builtin.set_fact:
+    _db_postgres_backup_date: '{{ ansible_date_time.date }}'
+
+- name: 'backup | backup databases'
+  ansible.builtin.include_tasks: backup_db.yml
+  loop: '{{ db_postgres_databases }}'
+  loop_control:
+    loop_var: db

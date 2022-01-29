@@ -1,0 +1,9 @@
+---
+###############################################################################
+# Postgres Environment Options
+###############################################################################
+# Set fact for postgres environment options to run commands
+
+- name: 'environment | set environment options for tasks'
+  ansible.builtin.set_fact:
+    _db_postgres_pgoptions: '{{ (db_postgres_auth_method == "scram-sha-256") | ternary("-c password_encryption=scram-sha-256", "") }}'

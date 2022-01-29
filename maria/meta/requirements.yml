@@ -1,0 +1,12 @@
+---
+# Ansible galaxy packages
+
+collections:
+  # https://docs.ansible.com/ansible/latest/collections/community/general/
+  # composer
+  - community.general
+  # https://docs.ansible.com/ansible/latest/collections/community/mysql/
+  # mysql management
+  - community.mysql
+
+roles: []

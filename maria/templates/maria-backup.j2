@@ -1,0 +1,44 @@
+#!/bin/bash
+#
+# Backup & compression of Maria DBs
+#
+set -e
+DATE_STAMP=`date +%Y-%m-%d`
+OWNER='{{ db_maria_user }}'
+GROUP='{{ db_maria_group }}'
+TARGET='{{ db_maria_backup_dir }}'
+OPTIONS='{{ db_maria_backup_options.strip() }}'
+
+function dump_all () {
+  DUMP="${TARGET}/all-databases-${DATE_STAMP}.sql"
+  /usr/bin/mysqldump -u root ${OPTIONS} --all-databases > "${DUMP}"
+  chown ${OWNER}:${GROUP} "${DUMP}"
+  ln -sf "${DUMP}" "${TARGET}/all-databases-latest.sql"
+
+  compress_db all-databases
+}
+
+function dump_dbs () {
+  /usr/bin/mysql -N -e 'show databases' | while read db; do
+    DUMP="${TARGET}/${db}-${DATE_STAMP}.sql"
+    /usr/bin/mysqldump -u root ${OPTIONS} "${db}" > "${DUMP}"
+    chown ${OWNER}:${GROUP} "${DUMP}"
+    ln -sf "${DUMP}" "${TARGET}/${db}-latest.sql"
+    compress_db "${db}"
+  done
+}
+
+function compress_db () {
+  # Args
+  #   1: database name.
+  #
+  # Sort files by most recent time
+  # Ignore first two (latest symlink, current backup)
+  # Compress & remove original sql file
+  #
+  # Assumes latest symlink always exists.
+  ls -t "${TARGET}/${1}"-*.sql | awk 'NR>2' | xargs -i tar zcf {}.tar.gz {} --remove-files 2>/dev/null
+}
+
+dump_all
+dump_dbs

@@ -1,0 +1,34 @@
+---
+###############################################################################
+# MariaDB Import
+###############################################################################
+# Setup user accounts & initial databases.
+#
+# If the database is newly created, automatically attempt to import the latest
+# backup.
+#
+# Patches:
+# * httips://github.com/geerlingguy/ansible-role-mysql/pull/442
+#   Add resource limits to user accounts.
+# * https://github.com/geerlingguy/ansible-role-mysql/pull/425
+#   Use unix socket as the preferred connection method.
+
+- name: 'import | create and import dbs if not present'
+  ansible.builtin.include_tasks: import_db.yml
+  loop: '{{ db_maria_databases }}'
+  loop_control:
+    loop_var: db
+
+- name: 'import | create users'
+  community.mysql.mysql_user:
+    name:         '{{ item.name }}'
+    host:         '{{ item.host|default("localhost") }}'
+    password:     '{{ item.password }}'
+    priv:         '{{ item.priv|default("*.*:USAGE") }}'
+    state:        '{{ item.state|default("present") }}'
+    append_privs: '{{ item.append_privs|default("no") }}'
+    encrypted:    '{{ item.encrypted|default("no") }}'
+    resource_limits:   '{{ item.resource_limits|default(omit) }}'
+    login_unix_socket: '{{ db_maria_client_server_socket }}'
+  loop: '{{ db_maria_users }}'
+  no_log: true # db password

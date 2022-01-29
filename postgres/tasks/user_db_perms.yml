@@ -1,0 +1,62 @@
+---
+###############################################################################
+# Postgres Users
+###############################################################################
+# Update users with full configuration and set explicit permision grants on
+# DB they access.
+#
+# Patches:
+# * https://github.com/geerlingguy/ansible-role-postgresql/pull/167
+#   Enable encrypted users.
+# * https://github.com/geerlingguy/ansible-role-postgresql/pull/165
+#   Add connection limit support (conn_limit) for db, users.
+# * https://github.com/geerlingguy/ansible-role-postgresql/pull/171
+#   Enable ansible connections if using non-default port.
+
+- ansible.builtin.include_tasks: pgoptions.yml
+
+- name: 'user db perms | reconfigure {{ user.name }}'
+  community.postgresql.postgresql_user:
+    name:            '{{ user.name }}'
+    password:        '{{ user.password|default(omit) }}'
+    encrypted:       '{{ user.encrypted|default(omit) }}'
+    priv:            '{{ user.priv|default(omit) }}'
+    role_attr_flags: '{{ user.role_attr_flags|default(omit) }}'
+    db:              '{{ user.db|default(omit) }}'
+    login_host:      '{{ user.login_host|default("localhost") }}'
+    login_user:      '{{ user.login_user|default(db_postgres_user) }}'
+    login_password:    '{{ user.login_password|default(omit) }}'
+    login_unix_socket: '{{ user.login_unix_socket|default(db_postgres_unix_sockets[0]) }}'
+    port:            '{{ user.port|default(omit) }}'
+    conn_limit:      '{{ user.conn_limit|default(omit) }}'
+    state:           '{{ user.state|default("present") }}'
+  become: true
+  become_user: '{{ db_postgres_user }}'
+  # Reference: https://github.com/ansible/ansible/issues/16048#issuecomment-229012509
+  vars:
+    ansible_ssh_pipelining: true
+  environment:
+    PGOPTIONS: '{{ _db_postgres_pgoptions }}'
+  no_log: true # user password
+
+# https://stackoverflow.com/questions/1348126/modify-owner-on-all-tables-simultaneously-in-postgresql
+- name: 'user db perms | set db {{ user.db }} permissions for {{ user.name }}'
+  ansible.builtin.shell: |
+    for table in `psql -qAt -c "select tablename from pg_tables where schemaname = 'public';" {{ user.db }}` ; do
+      psql -c "alter table \"${table}\" owner to {{ user.name }}" {{ user.db }};
+    done
+    for table in `psql -qAt -c "select sequence_name from information_schema.sequences where sequence_schema = 'public';" {{ user.db }}` ; do
+      psql -c "alter sequence \"${table}\" owner to {{ user.name }}" {{ user.db }};
+    done
+    for table in `psql -qAt -c "select table_name from information_schema.views where table_schema = 'public';" {{ user.db }}` ; do
+      psql -c "alter view \"${table}\" owner to {{ user.name }}" {{ user.db }} ;
+    done
+  changed_when: false
+  become: true
+  become_user: '{{ db_postgres_user }}'
+  # Reference: https://github.com/ansible/ansible/issues/16048#issuecomment-229012509
+  vars:
+    ansible_ssh_pipelining: true
+  environment:
+    PGOPTIONS: '{{ _db_postgres_pgoptions }}'
+  no_log: true # user password

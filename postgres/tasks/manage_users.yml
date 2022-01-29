@@ -1,0 +1,48 @@
+---
+###############################################################################
+# Manager Postgres Users
+###############################################################################
+# Check if user exists and create if enabled.
+#
+# Args:
+#   db_postgres_user: string postgres username.
+#   db_postgres_group: string postgres group.
+#   db_postgres_create_user: boolean true to create role default user.
+#   db_postgres_default_user: dict containing builitin.user postgres options.
+#   db_postgres_default_group: dict containing builitin.group postgres options.
+
+- name: 'manage users | confirm user exists'
+  ansible.builtin.command: 'id {{ db_postgres_user }}'
+  register: _postgres_user_exists
+  changed_when: _postgres_user_exists.rc > 0
+  failed_when: false
+
+- name: 'manage users | confirm group exists'
+  ansible.builtin.command: 'groups {{ db_postgres_group }}'
+  register: _postgres_group_exists
+  changed_when: _postgres_group_exists.rc > 0
+  failed_when: false
+
+- name: 'manage users | create postgres group'
+  ansible.builtin.group:
+    name:  '{{ db_postgres_default_group.name }}'
+    gid:   '{{ db_postgres_default_group.gid }}'
+    state: 'present'
+  when: db_postgres_create_user and _postgres_group_exists.rc != 0
+
+- name: 'manage users | create postgres user (logins disabled)'
+  ansible.builtin.user:
+    name:            '{{ db_postgres_default_user.name }}'
+    group:           '{{ db_postgres_default_user.group }}'
+    uid:             '{{ db_postgres_default_user.uid }}'
+    shell:           '{{ db_postgres_default_user.shell }}'
+    home:            '{{ db_postgres_default_user.home }}'
+    comment:         '{{ db_postgres_default_user.comment }}'
+    create_home:     '{{ db_postgres_default_user.create_home }}'
+    password:        '{{ db_postgres_default_user.password }}'
+    password_lock:   '{{ db_postgres_default_user.password_lock }}'
+    update_password: '{{ db_postgres_default_user.update_password }}'
+    expires:         '{{ db_postgres_default_user.expires }}'
+    system:          '{{ db_postgres_default_user.system }}'
+    state:           'present'
+  when: db_postgres_create_user and _postgres_user_exists.rc != 0

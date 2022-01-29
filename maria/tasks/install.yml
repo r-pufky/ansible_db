@@ -1,0 +1,67 @@
+---
+###############################################################################
+# MariaDB Install
+###############################################################################
+#
+# Reference:
+# * https://downloads.mariadb.org/mariadb/repositories/
+# * https://mariadb.com/docs/features/mariadb-enterprise-server/
+# * https://computingforgeeks.com/how-to-install-mariadb-on-debian/
+# * https://github.com/geerlingguy/ansible-role-mysql
+
+- ansible.builtin.include_tasks: manage_users.yml
+
+- name: 'install | check new install'
+  ansible.builtin.stat:
+    path: '/etc/init.d/mariadb'
+  register: _db_maria_new
+
+- name: 'install | ensure GPG is installed'
+  ansible.builtin.apt:
+    name:  'gnupg2'
+    state: 'latest'
+    update_cache: true
+
+- name: 'install | add maria repo key'
+  ansible.builtin.apt_key:
+    url:   'https://mariadb.org/mariadb_release_signing_key.asc'
+    state: 'present'
+
+- name: 'install | add maria repo'
+  ansible.builtin.apt_repository:
+    repo:     'deb https://mirror.rackspace.com/mariadb/repo/{{ db_maria_version }}/debian buster main'
+    filename: 'maria'
+    update_cache: true
+    state:    'present'
+
+- name: 'install | configure locales'
+  community.general.locale_gen:
+    name:  '{{ item }}'
+    state: 'present'
+  loop: '{{ db_maria_locales }}'
+
+- name: 'install | install libraries'
+  ansible.builtin.apt:
+    name: '{{ db_maria_python_packages }}'
+    state: present
+
+- name: 'install | install'
+  ansible.builtin.apt:
+    name:  '{{ db_maria_packages }}'
+    state: 'present'
+
+# maria autostarts when installed. stop/remove defaults (for custom settings).
+- name: 'install | stop for initial config'
+  ansible.builtin.service:
+    name:  'mariadb'
+    state: 'stopped'
+  when: not _db_maria_new.stat.exists
+
+- name: 'install | cleanup initial install for config'
+  ansible.builtin.file:
+    path:  '/var/lib/mysql/{{ item }}'
+    state: 'absent'
+  loop:
+    - 'ib_logfile0'
+    - 'ib_logfile1'
+  when: not _db_maria_new.stat.exists
