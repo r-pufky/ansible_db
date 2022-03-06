@@ -29,7 +29,7 @@
 
 - name: 'install | add maria repo'
   ansible.builtin.apt_repository:
-    repo:     'deb https://mirror.rackspace.com/mariadb/repo/{{ db_maria_version }}/debian buster main'
+    repo:     'deb https://mirror.rackspace.com/mariadb/repo/{{ db_maria_version }}/debian {{ ansible_distribution_release }} main'
     filename: 'maria'
     update_cache: true
     state:    'present'

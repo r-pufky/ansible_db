@@ -54,6 +54,7 @@ db_postgres_unix_sockets:
 db_postgres_backup_options: >
   --no-owner
   --no-privileges
+
 # Enable separate weekly cronjob to backup databases (includes compression)
 db_postgres_enable_weekly: true
 

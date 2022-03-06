@@ -39,6 +39,12 @@
   when: 'db.name not in (_db_postgres_existing_dbs.query_result|map(attribute="datname") )'
   no_log: true # db password
 
+# DB's created without a sql dump to import should not attempt imports.
+- name: 'import db | check for existing backup'
+  ansible.builtin.stat:
+    path: '{{ db_postgres_backup_dir }}/{{ db.name }}-latest.sql'
+  register: _db_postgres_import_backup
+
 - name: 'import db | import {{ db.name }}' # noqa no-handler conditional
   community.postgresql.postgresql_db:
     name:       '{{ db.name }}'
@@ -56,5 +62,7 @@
     ansible_ssh_pipelining: true
   environment:
     PGOPTIONS: '{{ _db_postgres_pgoptions }}'
-  when: _db_postgres_db_create.changed
+  when: |
+    _db_postgres_db_create.changed and
+    _db_postgres_import_backup.stat.exists
   no_log: true # db password
